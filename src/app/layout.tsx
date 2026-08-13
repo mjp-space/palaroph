@@ -10,36 +10,58 @@ export const viewport: Viewport = { width: 'device-width', initialScale: 1, view
 export const dynamic = 'force-dynamic';
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const userId = await currentUserId();
-  const [users, balance] = await Promise.all([listUsers(), walletBalance(userId)]);
+  // The layout wraps every page, so a database failure here takes down even the
+  // error and health pages. Degrade instead: render the shell, let the page
+  // below report the actual problem.
+  let users: any[] = [];
+  let balance = 0;
+  let userId = '';
+  let dbDown = false;
+
+  try {
+    userId = await currentUserId();
+    [users, balance] = await Promise.all([listUsers(), walletBalance(userId)]);
+  } catch {
+    dbDown = true;
+  }
+
   const me = users.find((u: any) => u.id === userId);
 
   return (
     <html lang="en">
       <body>
         <div id="shell">
-          {/* Dev-only identity switcher. Real auth is Supabase email + mobile OTP. */}
-          <div className="devbar">
-            <span>DEV</span>
-            <form action={switchUser}>
-              <select name="user_id" defaultValue={userId}>
-                {users.map((u: any) => (
-                  <option key={u.id} value={u.id}>
-                    {u.display_name} (@{u.handle}){u.is_staff ? ' · staff' : ''}
-                  </option>
-                ))}
-              </select>
-              <button type="submit">Switch</button>
-            </form>
-          </div>
+          {dbDown ? (
+            <div className="devbar" style={{ background: 'rgba(255,107,107,.12)', borderColor: 'rgba(255,107,107,.3)', color: 'var(--warn)' }}>
+              <span>DB</span>
+              <span style={{ flex: 1 }}>
+                Can&apos;t reach the database — open <a href="/health" style={{ textDecoration: 'underline' }}>/health</a> to see why
+              </span>
+            </div>
+          ) : (
+            /* Dev-only identity switcher. Real auth is Supabase email + mobile OTP. */
+            <div className="devbar">
+              <span>DEV</span>
+              <form action={switchUser}>
+                <select name="user_id" defaultValue={userId}>
+                  {users.map((u: any) => (
+                    <option key={u.id} value={u.id}>
+                      {u.display_name} (@{u.handle}){u.is_staff ? ' · staff' : ''}
+                    </option>
+                  ))}
+                </select>
+                <button type="submit">Switch</button>
+              </form>
+            </div>
+          )}
 
           <header>
             <div className="brand">
               Palaro<small>play money · beta</small>
             </div>
             <div className="bal">
-              <span>{me?.display_name ?? 'Wallet'}</span>
-              <b>{peso(balance, { decimals: false })}</b>
+              <span>{dbDown ? 'offline' : me?.display_name ?? 'Wallet'}</span>
+              <b>{dbDown ? '—' : peso(balance, { decimals: false })}</b>
             </div>
           </header>
 

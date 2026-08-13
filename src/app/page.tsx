@@ -5,7 +5,30 @@ import Flash from '@/components/Flash';
 export const dynamic = 'force-dynamic';
 
 export default async function MarketsPage() {
-  const markets = await listMarkets({ live: false });
+  let markets: Awaited<ReturnType<typeof listMarkets>> = [];
+  let error: { message: string; hint?: string } | null = null;
+
+  // A dead database should point you at the diagnosis, not throw Next's generic
+  // "A server error occurred" with nothing to act on.
+  try {
+    markets = await listMarkets({ live: false });
+  } catch (e: any) {
+    error = { message: e.message, hint: e.hint };
+  }
+
+  if (error) {
+    return (
+      <>
+        <h3>Can&apos;t load markets</h3>
+        <div className="card" style={{ borderColor: 'rgba(255,107,107,.4)' }}>
+          <div style={{ color: 'var(--warn)', fontSize: 13, marginBottom: 8 }}>{error.message}</div>
+          {error.hint && <div style={{ fontSize: 12, color: 'var(--dim)', lineHeight: 1.5 }}>{error.hint}</div>}
+        </div>
+        <a href="/health"><button className="go gh">Open the health check →</button></a>
+      </>
+    );
+  }
+
   const open = markets.filter((m) => m.status === 'OPEN');
   const rest = markets.filter((m) => m.status !== 'OPEN');
 
